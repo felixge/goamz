@@ -209,6 +209,7 @@ type RunInstances struct {
 	DisableAPITermination bool
 	ShutdownBehavior      string
 	PrivateIPAddress      string
+	BlockDevices          []BlockDeviceMapping
 }
 
 // Response to a RunInstances request.
@@ -248,6 +249,10 @@ type Instance struct {
 // will be used insteead.
 //
 // See http://goo.gl/Mcm3b for more details.
+//
+// BUG(felixge) DeleteOnTermination for BlockDevices is ignored. EC2's internal
+// default is true, which does not match go's zero value for booleans.
+// Possible solution: make DeleteOnTermination a pointer to a boolean.
 func (ec2 *EC2) RunInstances(options *RunInstances) (resp *RunInstancesResp, err error) {
 	params := makeParams("RunInstances")
 	params["ImageId"] = options.ImageId
@@ -315,6 +320,27 @@ func (ec2 *EC2) RunInstances(options *RunInstances) (resp *RunInstancesResp, err
 	}
 	if options.PrivateIPAddress != "" {
 		params["PrivateIpAddress"] = options.PrivateIPAddress
+	}
+
+	for i, b := range options.BlockDevices {
+		if b.DeviceName != "" {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".DeviceName"] = b.DeviceName
+		}
+		if b.VirtualName != "" {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".VirtualName"] = b.VirtualName
+		}
+		if b.SnapshotId != "" {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".Ebs.SnapshotId"] = b.SnapshotId
+		}
+		if b.VolumeSize != 0 {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".Ebs.VolumeSize"] = strconv.FormatInt(b.VolumeSize, 10)
+		}
+		if b.VolumeType != "" {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".Ebs.VolumeType"] = b.VolumeType
+		}
+		if b.IOPS != 0 {
+			params["BlockDeviceMapping."+strconv.Itoa(i)+".Ebs.Iops"] = strconv.FormatInt(b.IOPS, 10)
+		}
 	}
 
 	resp = &RunInstancesResp{}
